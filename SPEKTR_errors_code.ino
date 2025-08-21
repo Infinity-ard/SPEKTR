@@ -3,13 +3,13 @@
 #include <DallasTemperature.h>
 
 // Пины подключения
-#define Sensor1Pin 2
-#define Sensor2Pin 3
-#define Sensor3Pin 4
-#define Sensor4Pin 5
-#define TempPin 6
-#define TriggerPin 7
-#define ResetPin 8
+#define Sensor1Pin = 2
+#define Sensor2Pin = 3
+#define Sensor3Pin = 4
+#define Sensor4Pin = 5
+#define TempPin = 6
+#define TriggerPin = 7
+#define ResetPin = 8
 
 // Настройка дисплея
 LiquidCrystal_I2C Lcd(0x27, 16, 2);
