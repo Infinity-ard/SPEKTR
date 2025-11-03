@@ -2,34 +2,39 @@
 #include <LiquidCrystal_I2C.h>
 
 // -----------------------------
-// Определение пинов управления реле
+// Определение пинов управления транзисторами катушек
 // -----------------------------
-const int rlyPin1 = 2;  // Реле катушки 1
-const int rlyPin2 = 3;  // Реле катушки 2
-const int rlyPin3 = 4;  // Реле катушки 3
-const int rlyPin4 = 5;  // Реле катушки 4
-const int rlyPin5 = 6;  // Реле катушки 5
-
-// -----------------------------
-// Определение пинов сенсоров
-// -----------------------------
-const int sensorPin1 = 7;  // Сенсор для катушки 1
-const int sensorPin2 = 8;  // Сенсор для катушки 2
-const int sensorPin3 = 9;  // Сенсор для катушки 3
-const int sensorPin4 = 10; // Сенсор для катушки 4
-const int sensorPin5 = 11; // Сенсор для катушки 5
+const int trnPin1 = 2;  // Транзистор катушки 1
+const int trnPin2 = 3;  // Транзистор катушки 2
+const int trnPin3 = 4;  // Транзистор катушки 3
+const int trnPin4 = 5;  // Транзистор катушки 4
+const int trnPin5 = 6;  // Транзистор катушки 5
 
 // -----------------------------
 // Определение пинов управления
 // -----------------------------
-const int shtButton = 12;  // Кнопка выстрела
-const int chrgTrans = 13;  // Управление зарядом конденсаторов
+const int shtButton = 7;  // Кнопка выстрела
+const int chrgTrans = 8;  // Управление зарядом конденсаторов
+
+// -----------------------------
+// Пины потенциометров для задержек
+// -----------------------------
+const int pot1 = A0;  // Задержка между кат.1-2
+const int pot2 = A1;  // Задержка между кат.2-3
+const int pot3 = A2;  // Задержка между кат.3-4
+const int pot4 = A3;  // Задержка между кат.4-5
 
 // -----------------------------
 // Глобальные переменные для управления состоянием
 // -----------------------------
 bool charging = false;     // Флаг состояния зарядки
 bool readyToFire = false;  // Флаг готовности к выстрелу
+
+// Переменные для хранения задержек (в микросекундах)
+unsigned long delay1
+unsigned long delay2
+unsigned long delay3
+unsigned long delay4
 
 // -----------------------------
 // Инициализация LCD-дисплея
@@ -50,27 +55,20 @@ void setup() {
     delay(2000);                        // Задержка для отображения текста
 
     // Настройка режимов пинов реле
-    pinMode(rlyPin1, OUTPUT);  // Реле 1
-    pinMode(rlyPin2, OUTPUT);  // Реле 2
-    pinMode(rlyPin3, OUTPUT);  // Реле 3
-    pinMode(rlyPin4, OUTPUT);  // Реле 4
-    pinMode(rlyPin5, OUTPUT);  // Реле 5
-
-    // Настройка режимов пинов сенсоров
-    pinMode(sensorPin1, INPUT);  // Сенсор 1
-    pinMode(sensorPin2, INPUT);  // Сенсор 2
-    pinMode(sensorPin3, INPUT);  // Сенсор 3
-    pinMode(sensorPin4, INPUT);  // Сенсор 4
-    pinMode(sensorPin5, INPUT);  // Сенсор 5
+    pinMode(trnPin1, OUTPUT);  // Транзистор 1
+    pinMode(trnPin2, OUTPUT);  // Транзистор 2
+    pinMode(trnPin3, OUTPUT);  // Транзистор 3
+    pinMode(trnPin4, OUTPUT);  // Транзистор 4
+    pinMode(trnPin5, OUTPUT);  // Транзистор 5
 
     // Настройка режимов кнопки и трансформатора
-    pinMode(shtButton, INPUT);  // Кнопка выстрела
-    pinMode(chrgTrans, OUTPUT); // Управление зарядом
+    pinMode(shtButton, INPUT_PULLUP);  // Кнопка выстрела
+    pinMode(chrgTrans, OUTPUT);        // Управление зарядом
 
     // Сообщение о версии прошивки
     lcd.clear();                          // Очистка экрана
     centerText("Firmware version", 0);    // Текст на строке 0
-    centerText("24112024", 1);            // Версия на строке 1
+    centerText("02112025test", 1);        // Версия на строке 1
     delay(2000);                          // Задержка
     lcd.clear();                          // Очистка экрана
 
@@ -82,18 +80,57 @@ void setup() {
 // Основной цикл программы
 // -----------------------------
 void loop() {
-    lcd.clear();                         // Очистка экрана
-    centerText("Waiting actions", 0);    // Сообщение о готовности
-
+    // Всегда читаем текущие значения задержек
+    readPotentiometers();
+    
+    // Показываем текущие задержки на дисплее
+    displayCurrentDelays();
+    
     // Проверяем состояние кнопки выстрела
     if (digitalRead(shtButton) == LOW) {
-        // Если зарядка не начата и выстрел не готов
-        if (!charging && !readyToFire) {
-            startCharging();             // Начинаем зарядку
-        } else if (readyToFire) {
-            fire();                      // Выполняем выстрел
+        delay(50); // Дебаунс
+        if (digitalRead(shtButton) == LOW) {
+            // Если зарядка не начата и выстрел не готов
+            if (!charging && !readyToFire) {
+                startCharging();             // Начинаем зарядку
+            } else if (readyToFire) {
+                fireSequence();              // Выполняем выстрел
+            }
+            while (digitalRead(shtButton) == LOW); // Ждем отпускания
         }
     }
+    
+    delay(10); // Небольшая задержка для стабильности
+}
+
+// -----------------------------
+// Чтение значений с потенциометров
+// -----------------------------
+void readPotentiometers() {
+    delay1 = map(analogRead(pot1), 0, 1023, 0, 10000);  // 0-10000 мкс
+    delay2 = map(analogRead(pot2), 0, 1023, 0, 10000);  // 0-10000 мкс
+    delay3 = map(analogRead(pot3), 0, 1023, 0, 10000);  // 0-10000 мкс
+    delay4 = map(analogRead(pot4), 0, 1023, 0, 10000);  // 0-10000 мкс
+
+// -----------------------------
+// Отображение текущих задержек на дисплее
+// -----------------------------
+void displayCurrentDelays() {
+    lcd.clear();
+    
+    // Первая строка: задержки 1 и 2
+    lcd.setCursor(0, 0);
+    lcd.print("D1:");
+    lcd.print(delay1);
+    lcd.print(" D2:");
+    lcd.print(delay2);
+    
+    // Вторая строка: задержки 3 и 4
+    lcd.setCursor(0, 1);
+    lcd.print("D3:");
+    lcd.print(delay3);
+    lcd.print(" D4:");
+    lcd.print(delay4);
 }
 
 // -----------------------------
@@ -103,16 +140,16 @@ void dischargeCapacitors() {
     lcd.clear();                          // Очистка экрана
     centerText("Discharging caps", 0);    // Сообщение о разрядке
 
-    // Включаем все реле для разрядки
+    // Включаем все транзисторы для разрядки
     digitalWrite(rlyPin1, HIGH);
     digitalWrite(rlyPin2, HIGH);
     digitalWrite(rlyPin3, HIGH);
     digitalWrite(rlyPin4, HIGH);
     digitalWrite(rlyPin5, HIGH);
 
-    delay(100);  // Короткая задержка для выполнения разрядки
+    delay(500);  // Задержка для разрядки
 
-    // Выключаем реле
+    // Закрываем транзисторы
     digitalWrite(rlyPin1, LOW);
     digitalWrite(rlyPin2, LOW);
     digitalWrite(rlyPin3, LOW);
@@ -120,10 +157,9 @@ void dischargeCapacitors() {
     digitalWrite(rlyPin5, LOW);
 
     // Завершаем разрядку
-    delay(1000);                           // Задержка для завершения
+    delay(500);                           // Задержка для завершения
     lcd.clear();                           // Очистка экрана
-    centerText("Preparation done", 0);     // Сообщение о завершении
-    delay(1000);                           // Задержка
+    centerText("Ready", 0);                // Сообщение о готовности
 }
 
 // -----------------------------
@@ -132,59 +168,88 @@ void dischargeCapacitors() {
 void startCharging() {
     charging = true;                      // Устанавливаем флаг зарядки
     lcd.clear();                          // Очистка экрана
-    lcd.setCursor(0, 0);                  // Устанавливаем курсор
-    lcd.print("Charging caps");           // Сообщение о зарядке
-
-    int totalTime = 3000;                 // Общее время зарядки
-    int stepTime = totalTime / 5;         // Время на один шаг
+    centerText("CHARGING...", 0);         // Сообщение о зарядке
 
     digitalWrite(chrgTrans, HIGH);        // Запуск зарядки
 
-    for (int i = 0; i <= 5; i++) {        // Цикл прогресса
-        lcd.setCursor(0, 1);              // Курсор на второй строке
-        lcd.print("Charging: [");
-        for (int j = 0; j < 5; j++) {     // Рисуем шкалу
-            if (j < i) {
-                lcd.print("#");
-            } else {
-                lcd.print("-");
-            }
+    // Анимация прогресса заряда
+    for (int i = 0; i <= 16; i++) {
+        lcd.setCursor(0, 1);
+        lcd.print("[");
+        for (int j = 0; j < 16; j++) {
+            if (j < i) lcd.print("#");
+            else lcd.print(" ");
         }
         lcd.print("]");
-        if (i < 5) delay(stepTime);       // Задержка между шагами
+        delay(400); // Общее время зарядки ~6 сек
     }
 
     digitalWrite(chrgTrans, LOW);         // Завершение зарядки
     charging = false;                     // Сбрасываем флаг зарядки
     readyToFire = true;                   // Устанавливаем флаг готовности
-    lcd.clear();                          // Очистка экрана
-    centerText("Charging done", 0);       // Сообщение о завершении
-    delay(1000);
+    
     lcd.clear();
-    centerText("Ready to fire", 0);       // Готовность к выстрелу
+    centerText("CHARGED! READY!", 0);     // Сообщение о завершении
+    lcd.setCursor(0, 1);
+    lcd.print("Press to FIRE");
 }
 
 // -----------------------------
 // Функция выполнения выстрела
 // -----------------------------
-void fire() {
-    lcd.clear();                          // Очистка экрана
-    centerText("Firing", 0);              // Сообщение о выстреле
+void fireSequence() {
+    lcd.clear();
+    centerText("FIRING...", 0);           // Сообщение о выстреле
 
-    if (digitalRead(sensorPin1) == LOW) {
-        digitalWrite(rlyPin1, HIGH);
-        delay(100);                       // Время активации реле
-        digitalWrite(rlyPin1, LOW);
-    }
+    // Фиксированная длительность импульса для всех катушек (10 мс)
+    const unsigned long PULSE_DURATION = 10000;
 
-    // Аналогичные блоки для остальных сенсоров...
-
-    readyToFire = false;                  // Сброс флага готовности
-    lcd.clear();                          // Очистка экрана
-    centerText("Fire complete", 0);       // Сообщение о завершении
+    // Катушка 1 - включаем сразу
+    digitalWrite(trnPin1, HIGH);
+    delayMicroseconds(PULSE_DURATION);
+    digitalWrite(trnPin1, LOW);
+    
+    // Задержка перед катушкой 2
+    delayMicroseconds(delay1);
+    
+    // Катушка 2
+    digitalWrite(trnPin2, HIGH);
+    delayMicroseconds(PULSE_DURATION);
+    digitalWrite(trnPin2, LOW);
+    
+    // Задержка перед катушкой 3
+    delayMicroseconds(delay2);
+    
+    // Катушка 3
+    digitalWrite(trnPin3, HIGH);
+    delayMicroseconds(PULSE_DURATION);
+    digitalWrite(trnPin3, LOW);
+    
+    // Задержка перед катушкой 4
+    delayMicroseconds(delay3);
+    
+    // Катушка 4
+    digitalWrite(trnPin4, HIGH);
+    delayMicroseconds(PULSE_DURATION);
+    digitalWrite(trnPin4, LOW);
+    
+    // Задержка перед катушкой 5
+    delayMicroseconds(delay4);
+    
+    // Катушка 5
+    digitalWrite(trnPin5, HIGH);
+    delayMicroseconds(PULSE_DURATION);
+    digitalWrite(trnPin5, LOW);
+    
+    // Завершение выстрела
+    readyToFire = false;
+    
+    lcd.clear();
+    centerText("SHOT COMPLETE", 0);       // Сообщение о завершении
     delay(1000);
-
-    dischargeCapacitors();                // Разрядка после выстрела
+    
+    // Автоматическая разрядка после выстрела
+    dischargeCapacitors();
 }
 
 // -----------------------------
